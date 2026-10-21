@@ -40,128 +40,33 @@ git clone https://github.com/tu-usuario/ArduinoManager.git
 #include "ArduinoManager.hpp"
 ```
 
-### LED Digital Simple
+### Crear una placa D1 mini
 ```cpp
-#include "ArduinoManager.hpp"
-
-DigitalPin led(13, OUTPUT);
+Board* board;
+DigitalLedComponent* led;
 
 void setup() {
-    led.setValue(1.0); // Encender LED
-    led.perform();
-}
-
-void loop() {
-    // LED permanece encendido
+    board = BoardBuilder::initD1MiniBoard();
+    led = board->addDigitalLedComponent(D1MiniPins::D5);
 }
 ```
 
-### Sensor Analógico
-```cpp
-#include "ArduinoManager.hpp"
+Las etiquetas `D0`–`D8` usan los números GPIO del ESP8266 en la configuración
+de la placa. La D1 mini trabaja con lógica de 3,3 V y su entrada `A0` admite
+hasta 3,2 V. Consulta la [referencia de pines y capacidades](src/extras/docs/API.md#boardbuilder)
+antes de conectar señales externas.
 
-AnalogicPin sensor(A0, INPUT);
+## Conectividad WiFi en ESP8266
 
-void setup() {
-    Serial.begin(9600);
-}
+El módulo de provisión y registro es opcional y está dirigido a ESP8266, incluida
+la D1 mini. Incluye `ArduinoManagerESP8266.hpp` explícitamente; `ArduinoManager.hpp`
+no importa dependencias ESP8266. El core ESP8266 aporta `ESP8266WiFi`,
+`ESP8266WebServer`, EEPROM y el cliente HTTP.
 
-void loop() {
-    sensor.perform();
-    float valor = sensor.getValue();
-    
-    Serial.print("Sensor: ");
-    Serial.println(valor);
-    delay(1000);
-}
-```
-
-## 🔧 Ejemplos Avanzados
-
-### Componente LED RGB
-```cpp
-#include "ArduinoManager.hpp"
-
-void setup() {
-    Component ledRGB("LED RGB");
-    
-    // Agregar pines de colores
-    Pin* rojo = ledRGB.addDigitalPin(9, OUTPUT, "Rojo", 0);
-    Pin* verde = ledRGB.addDigitalPin(10, OUTPUT, "Verde", 0);
-    Pin* azul = ledRGB.addDigitalPin(11, OUTPUT, "Azul", 0);
-    
-    // Color púrpura (rojo + azul)
-    rojo->setValue(1.0);
-    azul->setValue(1.0);
-    
-    ledRGB.performPins();
-    
-    Serial.begin(9600);
-    Serial.println(ledRGB.toString());
-}
-```
-
-### Control PWM Suave
-```cpp
-#include "ArduinoManager.hpp"
-
-AnalogicPin pwmPin(6, OUTPUT);
-
-void setup() {
-    // Configuración inicial
-}
-
-void loop() {
-    // Fade in
-    for(float i = 0.0; i <= 1.0; i += 0.01) {
-        pwmPin.setValue(i);
-        pwmPin.perform();
-        delay(10);
-    }
-    
-    // Fade out
-    for(float i = 1.0; i >= 0.0; i -= 0.01) {
-        pwmPin.setValue(i);
-        pwmPin.perform();
-        delay(10);
-    }
-}
-```
-
-### Sistema Multi-Sensor
-```cpp
-#include "ArduinoManager.hpp"
-
-void setup() {
-    List sensores;
-    
-    // Crear sensores
-    AnalogicPin* luz = new AnalogicPin(A0, INPUT);
-    AnalogicPin* temperatura = new AnalogicPin(A1, INPUT);
-    AnalogicPin* humedad = new AnalogicPin(A2, INPUT);
-    
-    luz->setDescription("Sensor de Luz");
-    temperatura->setDescription("Sensor de Temperatura");
-    humedad->setDescription("Sensor de Humedad");
-    
-    // Agregar a la lista
-    sensores.add(luz);
-    sensores.add(temperatura);
-    sensores.add(humedad);
-    
-    Serial.begin(9600);
-    
-    // Leer todos los sensores
-    for(int i = 0; i < sensores.get_size(); i++) {
-        AnalogicPin* sensor = (AnalogicPin*)sensores.get(i);
-        sensor->perform();
-        
-        Serial.print(sensor->getDescription());
-        Serial.print(": ");
-        Serial.println(sensor->getValue());
-    }
-}
-```
+Consulta el sketch [`d1mini-wifi-resource.ino`](src/examples/d1mini-wifi-resource.ino)
+y la [guía de API y configuración WiFi](src/extras/docs/API.md#esp8266-wi-fi-resource)
+para configurar el AP de provisión, el host y puerto REST y el puerto local del
+recurso. No incluyas contraseñas ni tokens en el código fuente.
 
 ## 📚 Arquitectura
 
@@ -250,6 +155,19 @@ Para documentación detallada de la API, consulta:
 - Incluir documentación para nuevas funcionalidades
 - Agregar tests cuando sea posible
 - Mantener compatibilidad con Arduino IDE
+
+## Buenas prácticas
+
+Estas pautas aplican al desarrollar la biblioteca y al integrarla en un sketch:
+
+- **Trabaja desde la raíz de la biblioteca.** Los metadatos de Arduino están en `library.properties`; el código público está en `src/` y los sketches de ejemplo en `src/examples/`. Mantén cada clase en su área (`core/`, `components/`, `boards/`, `config/` o `utils/`) y usa `ArduinoManager.hpp` como cabecera agregadora.
+- **Sigue el estilo y la compatibilidad existentes.** La biblioteca declara C++11. Usa nombres y namespaces coherentes con el módulo, incluye las dependencias que cada cabecera necesita y evita depender de detalles internos cuando la API pública sea suficiente.
+- **Respeta la semántica de los pines.** Comprueba que el pin elegido admite la función requerida en la placa objetivo. `DigitalPin` acepta `0.0` o `1.0`; `AnalogicPin` representa valores de salida normalizados entre `0.0` y `1.0`, mientras que las lecturas analógicas también se guardan normalizadas. En Arduino Uno, las salidas PWM solo están disponibles en los pines compatibles con PWM.
+- **Configura el hardware una vez y actualízalo de forma explícita.** Crea la placa y los componentes en `setup()`. En `loop()`, llama a los métodos del componente cuando necesites leer o cambiar el hardware; para tareas periódicas, usa `millis()` en vez de bloquear el programa con `delay()`.
+- **Comprueba los resultados y los límites del hardware.** Valida los punteros que devuelven los métodos de alta de componentes y los valores de sensores antes de usarlos. Configura correctamente la tensión de referencia al calcular medidas analógicas y confirma el tipo de LED RGB (ánodo o cátodo común) y el orden de sus pines.
+- **Cuida la memoria y el tiempo de ejecución.** Las placas AVR suelen tener RAM limitada: evita asignaciones dinámicas repetidas y `String` de gran tamaño en bucles frecuentes. Las lecturas del DHT11 tienen un intervalo mínimo de dos segundos y pueden bloquear mientras se comunica con el sensor.
+- **Mantén sincronizados código, ejemplos y documentación.** Si cambias una firma pública o el comportamiento de un componente, actualiza `src/extras/docs/API.md` y un ejemplo pertinente. No presentes como implementada una capacidad que el código todavía no ofrece.
+- **Verifica los cambios en la placa adecuada.** Compila los ejemplos afectados para la placa objetivo antes de integrar el cambio y, cuando sea posible, comprueba su comportamiento con el hardware. Documenta la placa y las conexiones necesarias para reproducir la prueba.
 
 ## 📋 Requisitos
 

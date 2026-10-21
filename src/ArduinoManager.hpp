@@ -12,6 +12,7 @@
 
 // Incluir componentes
 #include "components/DigitalLedComponent.hpp"
+#include "components/DHT11Component.hpp"
 
 // Incluir configuraciones
 #include "config/PinConf.hpp"
@@ -19,6 +20,7 @@
 
 // Incluir targetas
 #include "boards/ArduinoUnoPins.hpp"
+#include "boards/D1MiniPins.hpp"
 
 // Incluir utilidades
 #include "utils/List.hpp"

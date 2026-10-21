@@ -3,6 +3,7 @@
 #include "../components/DigitalLedComponent.hpp"
 #include "../components/LM35Component.hpp"
 #include "../components/RGBLedComponent.hpp"
+#include "../components/DHT11Component.hpp"
 #include "../utils/BoardUtils.hpp"
 
 namespace ArduinoManager
@@ -79,6 +80,20 @@ namespace ArduinoManager
           internal->used = true;
           return that;
         }
+      }
+      return NULL;
+    }
+
+    Components::DHT11Component* Board::addDHT11Component(Config::PinConf pin){
+      Config::PinConf* internal = getInternalPinConf(pin);
+      if (internal != NULL) {
+        long code = Utils::BoardUtils::generateUniqueCode();
+        Components::DHT11Component* that = new Components::DHT11Component(code, internal->number);
+        if (components.add(that)) {
+          internal->used = true;
+          return that;
+        }
+        delete that;
       }
       return NULL;
     }

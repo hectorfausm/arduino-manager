@@ -6,6 +6,7 @@
 #include "../components/DigitalLedComponent.hpp"
 #include "../components/LM35Component.hpp"
 #include "../components/RGBLedComponent.hpp"
+#include "../components/DHT11Component.hpp"
 
 namespace ArduinoManager {
 namespace Core {
@@ -34,6 +35,7 @@ public:
     Components::DigitalLedComponent* addDigitalLedComponent(Config::PinConf pin);
     Components::LM35Component* addLM35Component(Config::PinConf pin);
     Components::RGBLedComponent* addRGBLedComponent(Config::PinConf rPin, Config::PinConf gPin, Config::PinConf bPin, bool cathode);
+    Components::DHT11Component* addDHT11Component(Config::PinConf pin);
     Utils::List* getComponents();
 
     // Podrías añadir aquí más métodos como addComponent(), getComponentList(), etc.

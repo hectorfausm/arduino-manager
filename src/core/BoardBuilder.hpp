@@ -20,6 +20,12 @@ namespace ArduinoManager
              * @return Instancia lista para usar.
              */
             static Board* initArduinoUnoBoard();
+
+            /**
+             * @brief Crea una instancia configurada para la placa LOLIN D1 mini (ESP8266).
+             * @return Instancia lista para usar.
+             */
+            static Board* initD1MiniBoard();
         };
 
     } // namespace Core

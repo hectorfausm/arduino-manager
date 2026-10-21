@@ -9,6 +9,7 @@
   - [Pin](#pin)
   - [DigitalPin](#digitalpin)
   - [AnalogicPin](#analogicpin)
+  - [DHT11Component](#dht11component)
   - [Component](#component)
   - [BoardBuilder](#boardbuilder)
 - [Configuration](#configuration)
@@ -202,6 +203,40 @@ Devuelve una representación en cadena del estado del pin analógico.
 
 ---
 
+### DHT11Component
+
+Componente para leer temperatura y humedad de un DHT11 mediante un pin digital.
+Se crea desde la placa con `addDHT11Component()` y debe inicializarse una vez
+en `setup()` con `begin()`.
+
+```cpp
+Board* board;
+DHT11Component* dht;
+
+void setup() {
+    board = BoardBuilder::initArduinoUnoBoard();
+    dht = board->addDHT11Component(ArduinoUnoPins::D2);
+    if (dht != nullptr) dht->begin();
+}
+
+void loop() {
+    if (dht != nullptr) {
+        float temperature = dht->readTemperature();
+        float humidity = dht->readHumidity(); // Reutiliza la misma muestra
+    }
+}
+```
+
+Las muestras se limitan a una cada dos segundos. Si todavía no hay una muestra
+válida, los métodos devuelven `NAN`; comprueba `isnan()` antes de usar los
+valores. `perform()` intenta actualizar la muestra y devuelve si hay datos
+válidos disponibles. El protocolo ocupa el microcontrolador durante la lectura.
+El componente se incluye en `ArduinoManager.hpp`.
+
+La línea de datos debe tener una resistencia pull-up (algunos módulos ya la
+incluyen); `INPUT_PULLUP` se activa como apoyo. Comprueba el voltaje compatible
+con el módulo DHT11 que estás usando antes de conectarlo.
+
 ### Component
 
 Clase base para componentes de hardware que contienen múltiples pines.
@@ -261,6 +296,40 @@ Retorna una representación en cadena del componente.
 ### BoardBuilder
 
 Clase para construir una placa Arduino con componentes y distribución de pines.
+
+Para LOLIN/WEMOS D1 mini (ESP8266), usa `initD1MiniBoard()` y las referencias
+simbólicas de `D1MiniPins`:
+
+```cpp
+Board* board;
+DigitalLedComponent* led;
+
+void setup() {
+    board = BoardBuilder::initD1MiniBoard();
+    led = board->addDigitalLedComponent(D1MiniPins::D5);
+}
+```
+
+| Etiqueta | GPIO | Capacidades y observaciones |
+| --- | ---: | --- |
+| D0 | 16 | Digital; sin PWM ni interrupciones |
+| D1 | 5 | Digital, PWM, I2C SCL |
+| D2 | 4 | Digital, PWM, I2C SDA |
+| D3 | 0 | Digital, PWM; pin de arranque |
+| D4 | 2 | Digital, PWM; LED integrado activo en bajo y pin de arranque |
+| D5 | 14 | Digital, PWM, SPI SCK |
+| D6 | 12 | Digital, PWM, SPI MISO |
+| D7 | 13 | Digital, PWM, SPI MOSI |
+| D8 | 15 | Digital, PWM, SPI SS; pin de arranque |
+| RX / TX | 3 / 1 | Digital y PWM; UART comparte pines con el puerto serie |
+| A0 | A0 del core | Única entrada analógica; máximo 3,2 V en D1 mini |
+
+La placa trabaja con lógica de 3,3 V. Evita aplicar señales de 5 V a los GPIO.
+GPIO0, GPIO2 y GPIO15 participan en la selección del modo de arranque; las
+cargas conectadas a D3, D4 y D8 no deben forzar niveles incompatibles durante
+el reinicio. D0/GPIO16 tampoco admite interrupciones externas. Estas capacidades
+se basan en la documentación y el pinout oficial de [LOLIN D1 mini](https://docs.wemos.cc/en/latest/d1/d1_mini.html)
+y el [ESP8266 Arduino Core](https://arduino-esp8266.readthedocs.io/en/latest/reference.html).
 
 #### Métodos Privados
 
@@ -522,3 +591,73 @@ void setup() {
 4. **Lista Circular**: La clase List implementa una lista enlazada circular para optimizar ciertas operaciones.
 
 5. **Namespace**: Todos los elementos están organizados en namespaces específicos para evitar conflictos de nombres.
+
+## ESP8266 Wi-Fi resource
+
+Este módulo es opcional y solo debe incluirse en sketches ESP8266 mediante
+`ArduinoManagerESP8266.hpp`. No se incluye desde `ArduinoManager.hpp`, para
+mantener el agregador principal independiente de las cabeceras del core ESP8266.
+El core de ESP8266 proporciona `ESP8266WiFi`, `ESP8266WebServer`, EEPROM y
+`ESP8266HTTPClient`.
+
+El ejemplo completo está en
+[`src/examples/d1mini-wifi-resource.ino`](../../examples/d1mini-wifi-resource.ino).
+Configura `provisioningSsid`, una contraseña AP de 8 a 63 caracteres (o cadena
+vacía para un AP abierto), `serverBaseUrl`, `serverPort`, `localResourcePort` y
+`httpTimeoutMs`. `authUsername` y `authPassword` son opcionales. No guardes
+credenciales reales ni tokens en el sketch.
+
+```cpp
+#include <ArduinoManagerESP8266.hpp>
+
+using namespace ArduinoManager::Network;
+
+WifiResourceSettings makeSettings() {
+  WifiResourceSettings value;
+  value.provisioningSsid = "D1Mini-Setup";
+  value.provisioningPassword = ""; // Empty means an open AP; configure a password for deployment.
+  value.serverBaseUrl = "http://192.168.1.10"; // Replace with the REST server host.
+  value.serverPort = 8080;
+  value.localResourcePort = 80;
+  return value;
+}
+
+WifiResourceSettings settings = makeSettings();
+ESP8266EEPROMCredentialStore store;
+ESP8266WifiResource resource(settings, store);
+
+void setup() {
+  Serial.begin(115200);
+  resource.begin();
+}
+
+void loop() {
+  resource.update();
+  WifiResourceState state = resource.getState();
+}
+```
+
+Cuando el almacenamiento no contiene credenciales válidas, la placa abre el AP
+configurado y atiende `POST /getCredentials`. El cuerpo debe ser formulario
+URL-encoded con `essid`, `password` y `token`; los tres campos son obligatorios y
+no pueden exceder 32, 64 y 128 bytes respectivamente. Un `200` confirma que el
+almacenamiento guardó los datos; solicitudes incompletas reciben `400`, campos
+demasiado largos `413` y fallos de almacenamiento `500`.
+
+Tras conectarse a la red, el cliente envía un PATCH al recurso existente:
+
+```http
+PATCH http://<serverBaseUrl>:<serverPort>/wifiresource/<token>
+Content-Type: application/json-patch+json
+
+[{"op":"replace","path":"/localUrl","value":"<IP>:<localResourcePort>"}]
+```
+
+Solo una respuesta HTTP `200` lleva el estado a `READY`. Fallos de Wi-Fi o REST
+se reintentan con espera creciente hasta 30 segundos, sin borrar credenciales ni
+reiniciar la placa. Si la IP cambia, se vuelve a publicar. `resetProvisioning()`
+borra las credenciales, cierra la conexión actual y abre de nuevo el AP.
+
+La llamada HTTP es síncrona y puede ocupar `update()` hasta el valor configurado
+en `httpTimeoutMs` (3 segundos en el ejemplo); los reintentos sí se programan sin
+esperas activas entre llamadas. El sketch debe llamar a `update()` regularmente.
