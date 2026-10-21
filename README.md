@@ -15,6 +15,7 @@ Una librería moderna y elegante para gestionar pines y componentes de Arduino d
 - 📊 **Tipo Seguro**: Validación automática de valores y rangos
 - 🎨 **API Intuitiva**: Sintaxis clara y fácil de usar
 - 📋 **Lista Circular**: Estructura de datos optimizada incluida
+- 📡 **WiFi ESP8266 opcional**: Provisión de credenciales y registro REST para D1 mini
 
 ## 🚀 Instalación Rápida
 
@@ -24,13 +25,22 @@ Una librería moderna y elegante para gestionar pines y componentes de Arduino d
 3. Selecciona el archivo descargado
 
 ### Opción 2: PlatformIO
-```bash
-pio lib install "ArduinoManager"
+
+Añade la biblioteca al proyecto en `platformio.ini` (consulta la
+[referencia de `lib_deps` de PlatformIO](https://docs.platformio.org/en/latest/projectconf/sections/env/options/library/lib_deps.html)):
+
+```ini
+[env:d1_mini]
+platform = espressif8266
+board = d1_mini
+framework = arduino
+lib_deps =
+    https://github.com/hectorfausm/arduino-manager.git
 ```
 
 ### Opción 3: Git Clone
 ```bash
-git clone https://github.com/tu-usuario/ArduinoManager.git
+git clone https://github.com/hectorfausm/arduino-manager.git
 ```
 
 ## 💡 Uso Básico
@@ -93,6 +103,7 @@ BoardBuilder
 - `ArduinoManager::Config` - Configuraciones
 - `ArduinoManager::Utils` - Utilidades
 - `ArduinoManager::Boards` - Definiciones de placas
+- `ArduinoManager::Network` - Conectividad opcional para ESP8266
 
 ## 🎯 Funciones de Pin Soportadas
 
@@ -135,9 +146,8 @@ comp.performPins();    // Ejecutar todos los pines
 ## 📖 Documentación Completa
 
 Para documentación detallada de la API, consulta:
-- 📘 [Documentación Completa](docs/extras/API.md)
-- 🔍 [Ejemplos Avanzados](examples/)
-- 🎓 [Guía de Inicio](docs/getting-started.md)
+- 📘 [Referencia de la API](src/extras/docs/API.md)
+- 🔍 [Sketches de ejemplo](src/examples/)
 
 ## 🤝 Contribuir
 
@@ -147,7 +157,7 @@ Para documentación detallada de la API, consulta:
 2. Crea una rama para tu feature (`git checkout -b feature/nueva-funcionalidad`)
 3. Commit tus cambios (`git commit -am 'Agregar nueva funcionalidad'`)
 4. Push a la rama (`git push origin feature/nueva-funcionalidad`)
-5. Abre un Pull Request
+5. Abre un Pull Request en [hectorfausm/arduino-manager](https://github.com/hectorfausm/arduino-manager)
 
 ### Pautas de Contribución
 
@@ -174,11 +184,13 @@ Estas pautas aplican al desarrollar la biblioteca y al integrarla en un sketch:
 - **Arduino IDE**: 1.8.x o superior
 - **PlatformIO**: Compatible
 - **C++ Standard**: C++11 o superior
-- **Placas soportadas**: Arduino Uno, Nano, ESP32, ESP8266, y más
+- **Perfiles de placa incluidos**: Arduino Uno y LOLIN/WEMOS D1 mini (ESP8266).
+  Las clases genéricas de pines pueden usarse con otras placas, pero este proyecto
+  no incluye mapas de pines para Nano o ESP32.
 
 ## 🐛 Reporte de Bugs
 
-¿Encontraste un bug? [Abre un issue](https://github.com/tu-usuario/ArduinoManager/issues) con:
+¿Encontraste un bug? [Abre un issue](https://github.com/hectorfausm/arduino-manager/issues) con:
 
 - Descripción del problema
 - Código para reproducir el error
@@ -187,11 +199,11 @@ Estas pautas aplican al desarrollar la biblioteca y al integrarla en un sketch:
 
 ## 📊 Roadmap
 
-- [ ] 🎯 v1.0.1: Implementación de compomentes
+- [x] 🎯 v1.0.1: Implementación de componentes principales (LED, RGB, LM35 y DHT11)
 
 ## 📄 Licencia
 
-Este proyecto está bajo la Licencia MIT. Ver [LICENSE](LICENSE) para más detalles.
+Este proyecto está bajo la Licencia MIT. El texto completo de la licencia se incluye a continuación.
 
 ```
 MIT License

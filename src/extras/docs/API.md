@@ -5,6 +5,7 @@
 - [Instalación](#instalación)
 - [Uso Básico](#uso-básico)
 - [Namespaces](#namespaces)
+- [ESP8266 Wi-Fi resource](#esp8266-wi-fi-resource)
 - [Core Classes](#core-classes)
   - [Pin](#pin)
   - [DigitalPin](#digitalpin)
@@ -58,6 +59,7 @@ La librería está organizada en los siguientes namespaces:
 - `ArduinoManager::Boards` - Configuraciones de placas
 - `ArduinoManager::Config` - Configuraciones y enumeraciones
 - `ArduinoManager::Utils` - Utilidades auxiliares
+- `ArduinoManager::Network` - Provisión y registro WiFi opcionales en ESP8266; requiere `ArduinoManagerESP8266.hpp`
 
 ## Core Classes
 
@@ -607,6 +609,16 @@ vacía para un AP abierto), `serverBaseUrl`, `serverPort`, `localResourcePort` y
 `httpTimeoutMs`. `authUsername` y `authPassword` son opcionales. No guardes
 credenciales reales ni tokens en el sketch.
 
+`serverBaseUrl` debe contener el esquema y el nombre de host del servidor, sin
+ruta ni puerto; el cliente añade `serverPort` y la ruta del recurso.
+
+`begin()` inicializa el almacén y elige `PROVISIONING` o `CONNECTING`.
+`update()` debe llamarse regularmente para atender el AP, observar la conexión y
+reintentar el registro. Los estados posibles son `PROVISIONING`, `CONNECTING`,
+`REGISTERING`, `READY` y `ERROR`; los errores de PATCH mantienen al controlador
+en `REGISTERING` para reintentar. `resetProvisioning()` devuelve `true` si pudo
+borrar las credenciales e iniciar de nuevo el AP; no reinicia la placa.
+
 ```cpp
 #include <ArduinoManagerESP8266.hpp>
 
@@ -643,6 +655,12 @@ URL-encoded con `essid`, `password` y `token`; los tres campos son obligatorios 
 no pueden exceder 32, 64 y 128 bytes respectivamente. Un `200` confirma que el
 almacenamiento guardó los datos; solicitudes incompletas reciben `400`, campos
 demasiado largos `413` y fallos de almacenamiento `500`.
+
+El AP queda abierto si `provisioningPassword` está vacío, y el endpoint local no
+usa autenticación HTTP; configura una contraseña AP para despliegues reales. Las
+credenciales y el token se guardan en EEPROM sin cifrado. El módulo no inicia un
+servidor para el recurso local: el sketch u otro servicio debe escuchar en
+`localResourcePort`; el PATCH solo publica esa dirección.
 
 Tras conectarse a la red, el cliente envía un PATCH al recurso existente:
 
