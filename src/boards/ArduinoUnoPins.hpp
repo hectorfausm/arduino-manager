@@ -54,7 +54,7 @@ namespace ArduinoManager
       static const Config::PinConf &AREF;
       static const Config::PinConf &RESET;
 
-      static const float DEFAULT_VCC = 5.0;
+      static const float DEFAULT_VCC;
     };
 
   } // namespace Boards

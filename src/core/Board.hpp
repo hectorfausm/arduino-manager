@@ -20,7 +20,7 @@ private:
     Config::PinConf* pinDistribution; // Array dinámico de pines
     int pinCount;
     Utils::List components; // Lista de componentes
-    Config::PinConf* Board::getInternalPinConf(const Config::PinConf& pin);
+    Config::PinConf* getInternalPinConf(const Config::PinConf& pin);
     float defaultVcc;
 
 public:

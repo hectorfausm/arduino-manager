@@ -5,6 +5,8 @@ namespace ArduinoManager
   namespace Boards
   {
 
+    const float ArduinoUnoPins::DEFAULT_VCC = 5.0f;
+
     // --- Array de pines ---
     const Config::PinConf arduinoUnoPins[] = {
         {"D0", 0, Config::FUNC_D_IO | Config::FUNC_RX},                                   // 0

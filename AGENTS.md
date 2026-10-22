@@ -4,6 +4,7 @@ Punto central de instrucciones para modelos de lenguaje y referencias a la docum
 
 ## Uso
 
+- La fuente de desarrollo es este directorio `ArduinoManager/`. Los tests importan la copia instalada en `/home/hector/Arduino/libraries/ArduinoManager`; después de cualquier cambio en esta biblioteca, sincroniza allí `README.md`, `library.properties` y el contenido de `src/` antes de compilar o ejecutar tests. No edites esa copia como fuente principal.
 - Antes de ejecutar comandos, consulta el entorno local; si falta, usa su plantilla para identificar datos pendientes y confirma las rutas necesarias.
 - Localiza el área de trabajo en el [mapa lógico](AGENTS.structure.md) y carga solo la documentación pertinente.
 - El README contiene los procedimientos operativos de la librería; consulta también la referencia API cuando el cambio afecte a su interfaz pública.
