@@ -13,6 +13,7 @@ namespace Network
     String provisioningSsid;
     String provisioningPassword;
     String serverBaseUrl;
+    String serverPathPrefix;
     uint16_t serverPort;
     uint16_t localResourcePort;
     uint16_t httpTimeoutMs;

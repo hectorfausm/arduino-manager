@@ -1,0 +1,11 @@
+{
+  "components": [
+    {
+      "attr": "climate",
+      "values": [
+        {"attr": "temperature", "value": 24, "healthy": true, "updatePolicy": "PERIODIC", "expectedIntervalSeconds": 10},
+        {"attr": "humidity", "value": 60, "healthy": true, "updatePolicy": "PERIODIC", "expectedIntervalSeconds": 10}
+      ]
+    }
+  ]
+}

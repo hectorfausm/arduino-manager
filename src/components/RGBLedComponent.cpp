@@ -48,7 +48,7 @@ namespace ArduinoManager
      * @return Color RGB en el LED.
      */
     Utils::RGB RGBLedComponent::getRGBColor(){
-      return RGBColors::White;
+      return ledColor;
     }
 
     const Utils::RGB RGBColors::Red     = Utils::RGB(255, 0, 0);

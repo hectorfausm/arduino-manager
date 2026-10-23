@@ -12,7 +12,7 @@ namespace Network
   {
     String encodePathSegment(const String &value)
     {
-      static const char HEX[] = "0123456789ABCDEF";
+      static const char HEX_DIGITS[] = "0123456789ABCDEF";
       String encoded;
       for (size_t i = 0; i < value.length(); ++i)
       {
@@ -26,8 +26,8 @@ namespace Network
         else
         {
           encoded += '%';
-          encoded += HEX[c >> 4];
-          encoded += HEX[c & 0x0F];
+          encoded += HEX_DIGITS[c >> 4];
+          encoded += HEX_DIGITS[c & 0x0F];
         }
       }
       return encoded;
@@ -38,6 +38,29 @@ namespace Network
       const WifiResourceSettings &settings)
       : _settings(settings)
   {
+  }
+
+  bool ESP8266WifiResourceClient::publishTelemetry(const String &token, const String &json)
+  {
+    if (token.length() == 0 || _settings.serverBaseUrl.length() == 0 ||
+        _settings.httpTimeoutMs == 0) return false;
+    String base = _settings.serverBaseUrl;
+    while (base.endsWith("/")) base.remove(base.length() - 1);
+    String prefix = _settings.serverPathPrefix;
+    if (prefix.length() && !prefix.startsWith("/")) prefix = "/" + prefix;
+    while (prefix.endsWith("/")) prefix.remove(prefix.length() - 1);
+    WiFiClient client;
+    HTTPClient http;
+    http.setTimeout(_settings.httpTimeoutMs);
+    const String url = base + ":" + String(_settings.serverPort) + prefix +
+        "/wifiresource/" + encodePathSegment(token) + "/telemetry";
+    if (!http.begin(client, url)) { http.end(); return false; }
+    http.addHeader("Content-Type", "application/json");
+    if (_settings.authUsername.length() || _settings.authPassword.length())
+      http.setAuthorization(_settings.authUsername.c_str(), _settings.authPassword.c_str());
+    int code = http.POST(json);
+    http.end();
+    return code == HTTP_CODE_OK;
   }
 
   bool ESP8266WifiResourceClient::patchResourceUrl(
@@ -51,8 +74,13 @@ namespace Network
     String baseUrl = _settings.serverBaseUrl;
     while (baseUrl.endsWith("/"))
       baseUrl.remove(baseUrl.length() - 1);
+    String pathPrefix = _settings.serverPathPrefix;
+    if (pathPrefix.length() > 0 && !pathPrefix.startsWith("/"))
+      pathPrefix = "/" + pathPrefix;
+    while (pathPrefix.endsWith("/"))
+      pathPrefix.remove(pathPrefix.length() - 1);
     const String url = baseUrl + ":" + String(_settings.serverPort) +
-                       "/wifiresource/" + encodePathSegment(token);
+                       pathPrefix + "/wifiresource/" + encodePathSegment(token);
     const String localUrl = localIP.toString() + ":" + String(localPort);
     const String body = "[{\"op\":\"replace\",\"path\":\"/localUrl\",\"value\":\"" +
                         localUrl + "\"}]";

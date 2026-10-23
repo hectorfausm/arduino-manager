@@ -55,7 +55,8 @@ namespace Network
   {
     if (_initialized)
       return true;
-    _initialized = EEPROM.begin(EEPROM_CAPACITY);
+    EEPROM.begin(EEPROM_CAPACITY);
+    _initialized = EEPROM.length() == EEPROM_CAPACITY;
     return _initialized;
   }
 

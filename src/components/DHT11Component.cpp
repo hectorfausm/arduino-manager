@@ -14,7 +14,7 @@ namespace ArduinoManager
     DHT11Component::DHT11Component(long code, int pin)
         : Core::Component(code, "DHT11"), dataPin(nullptr),
           _lastAttemptTime(0), _initialized(false), _hasAttempted(false),
-          _hasValidData(false)
+          _lastAttemptSucceeded(false)
     {
       // Pin only accepts INPUT/OUTPUT in its constructor. The DHT11 pull-up
       // is enabled explicitly in begin(), after registering the pin as INPUT.
@@ -51,6 +51,19 @@ namespace ArduinoManager
       return data[0] + data[1] * 0.1f;
     }
 
+    bool DHT11Component::readSample(float &temperature, float &humidity)
+    {
+      if (!readSensor())
+      {
+        temperature = humidity = NAN;
+        return false;
+      }
+      temperature = data[2] + (data[3] & 0x0F) * 0.1f;
+      if (data[3] & 0x80) temperature = -temperature;
+      humidity = data[0] + data[1] * 0.1f;
+      return true;
+    }
+
     bool DHT11Component::perform()
     {
       return readSensor();
@@ -63,10 +76,11 @@ namespace ArduinoManager
 
       const uint32_t now = millis();
       if (_hasAttempted && (uint32_t)(now - _lastAttemptTime) < MIN_INTERVAL_MS)
-        return _hasValidData;
+        return _lastAttemptSucceeded;
 
       _lastAttemptTime = now;
       _hasAttempted = true;
+      _lastAttemptSucceeded = false;
       uint8_t sample[5] = {0, 0, 0, 0, 0};
       const int pin = dataPin->getPin();
 
@@ -107,7 +121,7 @@ namespace ArduinoManager
 
       for (uint8_t i = 0; i < sizeof(data); ++i)
         data[i] = sample[i];
-      _hasValidData = true;
+      _lastAttemptSucceeded = true;
       return true;
     }
 

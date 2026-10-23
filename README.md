@@ -139,7 +139,7 @@ float valor = pin.getValue();
 ```cpp
 Component comp("Mi Componente");
 Pin* p1 = comp.addDigitalPin(12, OUTPUT, "LED", 0);
-Pin* p2 = comp.addAnalogicPin(A1, INPUT, "Sensor", 0.0);
+Pin* p2 = comp.addAnalogicPin(A1, INPUT, "Component", 0.0);
 comp.performPins();    // Ejecutar todos los pines
 ```
 
@@ -174,8 +174,8 @@ Estas pautas aplican al desarrollar la biblioteca y al integrarla en un sketch:
 - **Sigue el estilo y la compatibilidad existentes.** La biblioteca declara C++11. Usa nombres y namespaces coherentes con el módulo, incluye las dependencias que cada cabecera necesita y evita depender de detalles internos cuando la API pública sea suficiente.
 - **Respeta la semántica de los pines.** Comprueba que el pin elegido admite la función requerida en la placa objetivo. `DigitalPin` acepta `0.0` o `1.0`; `AnalogicPin` representa valores de salida normalizados entre `0.0` y `1.0`, mientras que las lecturas analógicas también se guardan normalizadas. En Arduino Uno, las salidas PWM solo están disponibles en los pines compatibles con PWM.
 - **Configura el hardware una vez y actualízalo de forma explícita.** Crea la placa y los componentes en `setup()`. En `loop()`, llama a los métodos del componente cuando necesites leer o cambiar el hardware; para tareas periódicas, usa `millis()` en vez de bloquear el programa con `delay()`.
-- **Comprueba los resultados y los límites del hardware.** Valida los punteros que devuelven los métodos de alta de componentes y los valores de sensores antes de usarlos. Configura correctamente la tensión de referencia al calcular medidas analógicas y confirma el tipo de LED RGB (ánodo o cátodo común) y el orden de sus pines.
-- **Cuida la memoria y el tiempo de ejecución.** Las placas AVR suelen tener RAM limitada: evita asignaciones dinámicas repetidas y `String` de gran tamaño en bucles frecuentes. Las lecturas del DHT11 tienen un intervalo mínimo de dos segundos y pueden bloquear mientras se comunica con el sensor.
+- **Comprueba los resultados y los límites del hardware.** Valida los punteros que devuelven los métodos de alta de componentes y los valores de componentes antes de usarlos. Configura correctamente la tensión de referencia al calcular medidas analógicas y confirma el tipo de LED RGB (ánodo o cátodo común) y el orden de sus pines.
+- **Cuida la memoria y el tiempo de ejecución.** Las placas AVR suelen tener RAM limitada: evita asignaciones dinámicas repetidas y `String` de gran tamaño en bucles frecuentes. Las lecturas del DHT11 tienen un intervalo mínimo de dos segundos y pueden bloquear mientras se comunica con el componente.
 - **Mantén sincronizados código, ejemplos y documentación.** Si cambias una firma pública o el comportamiento de un componente, actualiza `src/extras/docs/API.md` y un ejemplo pertinente. No presentes como implementada una capacidad que el código todavía no ofrece.
 - **Verifica los cambios en la placa adecuada.** Compila los ejemplos afectados para la placa objetivo antes de integrar el cambio y, cuando sea posible, comprueba su comportamiento con el hardware. Documenta la placa y las conexiones necesarias para reproducir la prueba.
 
@@ -240,3 +240,49 @@ copies or substantial portions of the Software.
 *Hecho con ❤️ para la comunidad Arduino*
 
 </div>
+
+
+## Estado de componentes y telemetría ESP8266
+
+Los componentes físicos se publican con sus valores agrupados. Para un DHT11:
+
+```cpp
+ArduinoManager::Components::DHT11Component climate(1, 4); // D2/GPIO4
+// En setup():
+climate.begin();
+bool added = wifiResource.addDHT11Component("climate", "temperature", "humidity",
+    ComponentUpdatePolicy::PERIODIC, 10, climate);
+// Comprueba added antes de wifiResource.begin().
+```
+
+Temperatura y humedad proceden de una adquisición común y siempre viajan juntas:
+
+```json
+{"components":[{"attr":"climate","values":[{"attr":"temperature","value":24,"healthy":true,"updatePolicy":"PERIODIC","expectedIntervalSeconds":10},{"attr":"humidity","value":60,"healthy":true,"updatePolicy":"PERIODIC","expectedIntervalSeconds":10}]}]}
+```
+
+`GET /status` incluye todos los componentes. La telemetría POST incluye los pendientes,
+siempre completos; un fallo HTTP conserva el conjunto para reintentarlo cada 3 s.
+Un fallo de adquisición del DHT11 devuelve ambos valores con `healthy:false` y
+`value:null`; los getters devuelven `NAN` durante la caché de ese intento fallido.
+
+La firma escalar `addComponent(attr, policy, intervalSeconds, reader, writer)` sigue
+funcionando para LED, LM35 y otros componentes: su salida también usa `values`.
+`addCompositeComponent` permite otros lectores conjuntos con escritores por canal.
+Cada componente tiene una única política y cadencia. Para migrar un DHT11, sustituye
+sus dos altas escalares por una llamada `addDHT11Component`; utiliza un intervalo
+común de 2–86400 segundos para `PERIODIC`, o 0 para `ON_CHANGE` (muestreo mínimo
+2000 ms). No registres sus canales por separado. Los nombres de valores deben
+ser únicos en la placa y coincidir con el alta administrativa en domo.
+
+Se conservan provisión, token, HTTP Basic y PATCH de `/localUrl`. Los actuadores
+aceptan `POST /ATRIBUTO?value=NUMERO` validado; los lectores sin escritor responden
+405. El [ejemplo WiFi](src/examples/d1mini-wifi-resource.ino) incluye DHT11 en
+D2/GPIO4, LED y una alternativa LM35. Comprueba siempre las altas antes de `begin()`.
+
+Consulta la [API](src/extras/docs/API.md#estado-de-componentes-y-telemetría-esp8266)
+para firmas, validación, planificación y comandos de pruebas. Tras sincronizar
+la biblioteca instalada, ejecuta `python3 tests/test_components.py` (C++ real con HAL
+y HTTP controlados) y `python3 tests/compile_esp8266.py` (objetos Xtensa con core
+3.1.2, sin enlace ni carga). Si la instalación es de solo lectura, ambos aceptan
+`ARDUINO_MANAGER_LIBRARY` apuntando a una copia sincronizada alternativa.

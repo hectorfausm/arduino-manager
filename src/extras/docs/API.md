@@ -11,7 +11,7 @@
   - [DigitalPin](#digitalpin)
   - [AnalogicPin](#analogicpin)
   - [DHT11Component](#dht11component)
-  - [Component](#component)
+  - [Component](#componente)
   - [BoardBuilder](#boardbuilder)
 - [Configuration](#configuration)
   - [PinConf](#pinconf)
@@ -44,9 +44,9 @@ void setup() {
     led.perform();
     
     // Crear un pin analógico
-    AnalogicPin sensor(A0, INPUT);
-    sensor.perform();
-    float valor = sensor.getValue();
+    AnalogicPin component(A0, INPUT);
+    component.perform();
+    float valor = component.getValue();
 }
 ```
 
@@ -487,23 +487,23 @@ void loop() {
 }
 ```
 
-### Ejemplo 2: Sensor Analógico
+### Ejemplo 2: Component Analógico
 
 ```cpp
 #include "ArduinoManager.hpp"
 
-AnalogicPin sensor(A0, INPUT);
+AnalogicPin component(A0, INPUT);
 
 void setup() {
     Serial.begin(9600);
-    sensor.setDescription("Sensor de luz");
+    component.setDescription("Component de luz");
 }
 
 void loop() {
-    sensor.perform(); // Leer valor
-    float valor = sensor.getValue();
+    component.perform(); // Leer valor
+    float valor = component.getValue();
     
-    Serial.print("Valor del sensor: ");
+    Serial.print("Valor del componente: ");
     Serial.println(valor);
     
     delay(1000);
@@ -605,12 +605,15 @@ El core de ESP8266 proporciona `ESP8266WiFi`, `ESP8266WebServer`, EEPROM y
 El ejemplo completo está en
 [`src/examples/d1mini-wifi-resource.ino`](../../examples/d1mini-wifi-resource.ino).
 Configura `provisioningSsid`, una contraseña AP de 8 a 63 caracteres (o cadena
-vacía para un AP abierto), `serverBaseUrl`, `serverPort`, `localResourcePort` y
-`httpTimeoutMs`. `authUsername` y `authPassword` son opcionales. No guardes
+vacía para un AP abierto), `serverBaseUrl`, `serverPathPrefix`, `serverPort`, `localResourcePort` y
+`httpTimeoutMs`. `serverPathPrefix` es opcional y permite configurar la ruta base
+de la API (por ejemplo, `/domo/rest`); vacío conserva la ruta raíz actual.
+`authUsername` y `authPassword` son opcionales. No guardes
 credenciales reales ni tokens en el sketch.
 
 `serverBaseUrl` debe contener el esquema y el nombre de host del servidor, sin
-ruta ni puerto; el cliente añade `serverPort` y la ruta del recurso.
+ruta ni puerto; el cliente añade `serverPort`, `serverPathPrefix` y la ruta del
+recurso.
 
 `begin()` inicializa el almacén y elige `PROVISIONING` o `CONNECTING`.
 `update()` debe llamarse regularmente para atender el AP, observar la conexión y
@@ -629,7 +632,8 @@ WifiResourceSettings makeSettings() {
   value.provisioningSsid = "D1Mini-Setup";
   value.provisioningPassword = ""; // Empty means an open AP; configure a password for deployment.
   value.serverBaseUrl = "http://192.168.1.10"; // Replace with the REST server host.
-  value.serverPort = 8080;
+  value.serverPathPrefix = "/domo/rest"; // Base path for this Java REST server.
+  value.serverPort = 9024;
   value.localResourcePort = 80;
   return value;
 }
@@ -665,7 +669,7 @@ servidor para el recurso local: el sketch u otro servicio debe escuchar en
 Tras conectarse a la red, el cliente envía un PATCH al recurso existente:
 
 ```http
-PATCH http://<serverBaseUrl>:<serverPort>/wifiresource/<token>
+PATCH http://<serverBaseUrl>:<serverPort><serverPathPrefix>/wifiresource/<token>
 Content-Type: application/json-patch+json
 
 [{"op":"replace","path":"/localUrl","value":"<IP>:<localResourcePort>"}]
@@ -679,3 +683,148 @@ borra las credenciales, cierra la conexión actual y abre de nuevo el AP.
 La llamada HTTP es síncrona y puede ocupar `update()` hasta el valor configurado
 en `httpTimeoutMs` (3 segundos en el ejemplo); los reintentos sí se programan sin
 esperas activas entre llamadas. El sketch debe llamar a `update()` regularmente.
+
+
+## Estado de componentes y telemetría ESP8266
+
+El registro se realiza antes de `begin()`. Cada componente físico tiene una identidad,
+una política y un intervalo común para todos sus valores. Comprueba siempre el
+`bool` devuelto por los métodos de alta; `false` no añade ni modifica componentes.
+Los nombres deben coincidir con el alta administrativa existente en domo.
+La placa no crea recursos administrativos y conserva la provisión del token,
+HTTP Basic configurable y PATCH de `/localUrl` descritos arriba.
+
+### DHT11: lectura y publicación conjunta
+
+```cpp
+ArduinoManager::Components::DHT11Component climate(1, 4); // D2/GPIO4
+// En setup(), antes de wifiResource.begin():
+climate.begin();
+bool added = wifiResource.addDHT11Component(
+    "climate", "temperature", "humidity",
+    ComponentUpdatePolicy::PERIODIC, 10, climate);
+```
+
+Firma pública en `ESP8266WifiResource` y `ESP8266ComponentService`:
+
+```cpp
+bool addDHT11Component(const String &attr, const String &temperatureAttr,
+    const String &humidityAttr, ComponentUpdatePolicy policy,
+    uint32_t intervalSeconds, Components::DHT11Component &dht);
+```
+
+`dht` debe seguir existiendo mientras el servicio esté en uso. Este adaptador
+invoca una sola vez `dht.readSample(float &temperature, float &humidity)` y publica
+ambos valores juntos. La lectura conjunta devuelve `false` y ambos resultados
+`NAN` si falla la adquisición. Los getters individuales comparten el resultado
+del último intento durante los 2000 ms mínimos: después de un timeout o checksum
+incorrecto ninguno devuelve la última muestra correcta como lectura válida.
+Una trama correcta posterior recupera ambos canales.
+
+`PERIODIC` admite un intervalo entero 2–86400 segundos para DHT11. `ON_CHANGE`
+requiere intervalo 0 y adquiere como máximo cada 2000 ms. El resto de componentes
+periódicos admite 1–86400 segundos, sujeto a su mínimo de adquisición.
+
+Para dos DHT11 registra, por ejemplo, `climate` con `temperature`/`humidity`
+y `climate2` con `temperature2`/`humidity2`. Las identidades exteriores son únicas;
+los nombres de valores son únicos en toda la placa. No se agrupa por tipo.
+
+### API compuesta general y compatibilidad escalar
+
+```cpp
+using Writer = std::function<bool(double)>;
+struct Channel { String attr; Writer write; };
+using JointReader = std::function<bool(std::vector<double> &)>;
+
+bool addCompositeComponent(const String &attr, const std::vector<Channel> &channels,
+    ComponentUpdatePolicy policy, uint32_t intervalSeconds,
+    JointReader read, uint32_t minimumReadIntervalMs = 0);
+
+bool addComponent(const String &attr, ComponentUpdatePolicy policy,
+    uint32_t intervalSeconds, Reader read, Writer write = Writer());
+```
+
+Los alias `Reader`, `Writer`, `Channel` y `JointReader` están en
+`ESP8266ComponentService`. El lector conjunto recibe un vector del tamaño de los
+canales, inicializado a `NAN`, y rellena sus posiciones en el mismo orden.
+Un retorno `false`, tamaño incorrecto o cualquier valor no finito invalida todos
+los valores de esa adquisición. Cada canal puede tener su propio escritor;
+un `Writer` vacío significa solo lectura. Se admiten hasta 16 componentes físicos
+y 16 canales por componente. Los nombres tienen 1–64 caracteres alfanuméricos,
+guion o guion bajo; `status` y `getCredentials` están reservados.
+
+`addComponent` conserva su firma y su lector `double()` para LM35, LED y otros
+componentes escalares. Crea un componente con un valor, ambos con el mismo `attr`.
+`NAN` indica fallo. Su JSON también pasa a usar el array `values`.
+
+No existe configuración de política o intervalo por canal dentro de un componente
+compuesto, por lo que no pueden arrancarse canales contradictorios. Para migrar
+las dos altas escalares de un DHT11, elimínalas y usa una sola llamada
+`addDHT11Component`, acordando un intervalo común de al menos 2 segundos. No añadas
+los canales por separado. Las altas duplicadas y las políticas o intervalos
+inválidos se rechazan antes de modificar el registro.
+
+### Contrato HTTP y programación
+
+`GET /status` devuelve todos los componentes físicos y todos sus valores:
+
+```json
+{"components":[{"attr":"climate","values":[{"attr":"temperature","value":24,"healthy":true,"updatePolicy":"PERIODIC","expectedIntervalSeconds":10},{"attr":"humidity","value":60,"healthy":true,"updatePolicy":"PERIODIC","expectedIntervalSeconds":10}]}]}
+```
+
+Cada valor declara `updatePolicy`; `expectedIntervalSeconds` es un entero para
+`PERIODIC` y `null` para `ON_CHANGE`. Si falla el DHT11, se incluyen los dos valores
+con `healthy:false` y `value:null`. Domo puede conservar su última lectura correcta.
+
+`update()` y `/status` evalúan las adquisiciones que correspondan según la cadencia
+común; `/status` no fuerza nuevas adquisiciones ni retrasa el próximo vencimiento.
+La cadencia se cuenta desde el final de la adquisición para respetar también el
+mínimo del driver. La respuesta local incluye los valores disponibles de todos
+los componentes. Los periódicos publican aunque sus valores no cambien; los demás,
+cuando cambia algún valor o la salud del conjunto. Al conectar se publica el
+estado inicial de todos los componentes.
+
+La telemetría usa el mismo contrato en
+`POST /domo/rest/wifiresource/{token}/telemetry`, con HTTP Basic configurable.
+Puede incluir solo los componentes pendientes, pero siempre con todos sus valores.
+Un fallo de transporte conserva pendiente el componente físico completo y reintenta
+cada 3 segundos. Nuevas adquisiciones sustituyen su estado pendiente completo;
+no existe cola histórica. Una consulta `/status` nunca consume lo pendiente.
+El bucle debe llamar a `update()` regularmente; HTTP puede bloquear hasta
+`httpTimeoutMs`.
+
+Se conserva `POST /ATRIBUTO?value=NUMERO` para cada canal con escritor. Se rechazan
+valores no finitos, texto sobrante o valores rechazados por el escritor con 400.
+Un canal sin escritor devuelve 405: temperatura, humedad y LM35 son de solo lectura.
+Estas rutas locales mantienen el contrato sin autenticación del recurso y deben
+permanecer en la red doméstica.
+
+Domo asigna la fecha de recepción; la placa no necesita un reloj UTC.
+Una lectura periódica caduca tras tres intervalos. La comprobación del portal
+consulta `/status` y distingue fallo de componente de ausencia de respuesta de la placa.
+No se implementa reinicio remoto.
+
+### Verificación
+
+Sincroniza primero `README.md`, `library.properties` y `src/` con la biblioteca
+instalada como indica AGENTS.md. Después, desde la raíz de ArduinoManager:
+
+```bash
+python3 tests/test_components.py
+python3 tests/compile_esp8266.py
+```
+
+El primer comando compila y ejecuta los `.cpp` reales de driver, servicio y cliente
+con `g++ -std=c++11`, reloj y pulsos digitales controlados, servidor HTTP local
+simulado y transporte HTTP simulado. Python comprueba el JSON producido por ese
+C++; no reimplementa el servicio. Incluye checksum, timeout, caché, recuperación,
+dos DHT11, actuador, validación, reintentos, `/status`, lectura sola y reconexión
+mediante el ciclo `stop()/begin()` del servicio.
+
+El segundo compila a objetos los fuentes WiFi, componentes y ejemplos con el
+core ESP8266 3.1.2 y Xtensa para D1 mini. No enlaza ni carga firmware.
+Ambos admiten `ARDUINO_MANAGER_LIBRARY` para seleccionar explícitamente otra
+instalación sincronizada, por ejemplo una copia temporal cuando la instalación
+habitual es de solo lectura. Esa alternativa no actualiza la biblioteca habitual.
+Estas pruebas no sustituyen la validación de temporización eléctrica con hardware
+ni una entrega HTTP al servidor domo real.

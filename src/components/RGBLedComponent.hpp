@@ -58,8 +58,7 @@ namespace ArduinoManager
         /**
          * @brief Obtiene el color RGB actual del LED.
          * 
-         * @return Puntero a un arreglo de 3 enteros con las intensidades RGB actuales.
-         * El orden es: [rojo, verde, azul].
+         * @return Color RGB guardado por la última operación correcta; negro al apagar.
          */
         Utils::RGB  getRGBColor();
 

@@ -20,7 +20,7 @@ namespace Network
 
   ESP8266WifiResource::ESP8266WifiResource(
       const WifiResourceSettings &settings, ICredentialStore &credentialStore)
-      : _settings(settings), _credentialStore(credentialStore),
+      : _components(settings), _settings(settings), _credentialStore(credentialStore),
         _provisioningServer(credentialStore), _client(settings),
         _state(WifiResourceState::ERROR), _nextWifiAttempt(0),
         _wifiRetryDelay(INITIAL_RETRY_DELAY_MS), _nextRegistrationAttempt(0),
@@ -59,6 +59,7 @@ namespace Network
 
   void ESP8266WifiResource::startStationConnection()
   {
+    _components.stop();
     _provisioningServer.stop();
     WiFi.mode(WIFI_STA);
     WiFi.begin(_credentials.ssid.c_str(), _credentials.password.c_str());
@@ -100,10 +101,12 @@ namespace Network
       }
       else if (WiFi.localIP() != _registeredIP)
       {
+        _components.stop();
         _state = WifiResourceState::REGISTERING;
         _nextRegistrationAttempt = now;
         _registrationRetryDelay = INITIAL_RETRY_DELAY_MS;
       }
+      else _components.update(_credentials.token);
     }
   }
 
@@ -142,6 +145,7 @@ namespace Network
     {
       _registeredIP = currentIP;
       _state = WifiResourceState::READY;
+      _components.begin();
       _registrationRetryDelay = INITIAL_RETRY_DELAY_MS;
       return;
     }
@@ -160,6 +164,7 @@ namespace Network
     if (!_credentialStore.clear())
       return false;
 
+    _components.stop();
     _provisioningServer.stop();
     WiFi.disconnect(true);
     WiFi.mode(WIFI_OFF);

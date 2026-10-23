@@ -32,6 +32,9 @@ namespace ArduinoManager
        */
       float readHumidity();
 
+      /** Both outputs share one attempt; failure sets both to NAN. */
+      bool readSample(float &temperature, float &humidity);
+
       /**
        * @brief Método del framework para operaciones
        */
@@ -43,7 +46,7 @@ namespace ArduinoManager
       uint32_t _lastAttemptTime;
       bool _initialized;
       bool _hasAttempted;
-      bool _hasValidData;
+      bool _lastAttemptSucceeded;
 
       bool readSensor();
       uint32_t expectPulse(bool level);
